@@ -1,3 +1,3 @@
 package ru.open.cu.student.ast;
 
-public abstract class Expr extends AstNode {}
+public abstract class Expr implements AstNode {}

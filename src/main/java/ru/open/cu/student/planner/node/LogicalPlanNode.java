@@ -3,15 +3,10 @@ package ru.open.cu.student.planner.node;
 
 import java.util.List;
 
-/**
- * Абстрактная базовая нода логического плана.
- * Все логические операторы (Project, Filter, Scan, CreateTable, Insert)
- * наследуются от неё.
- */
 public abstract class LogicalPlanNode {
 
-    protected final String nodeType;       // тип узла (Project, Filter и т.д.)
-    protected List<String> outputColumns;  // схема выходных колонок
+    protected final String nodeType;
+    protected List<String> outputColumns;
 
     protected LogicalPlanNode(String nodeType) {
         this.nodeType = nodeType;
@@ -29,9 +24,6 @@ public abstract class LogicalPlanNode {
         this.outputColumns = outputColumns;
     }
 
-    /**
-     * Удобный метод для отладки — красивый вывод дерева
-     */
     public String prettyPrint(String indent) {
         return indent + nodeType + "\n";
     }

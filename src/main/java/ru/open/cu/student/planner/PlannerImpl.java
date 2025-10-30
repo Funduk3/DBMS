@@ -1,24 +1,18 @@
 package ru.open.cu.student.planner;
 
-
 import ru.open.cu.student.ast.QueryTree;
+import ru.open.cu.student.ast.ColumnDef;
+import ru.open.cu.student.ast.TargetEntry;
 import ru.open.cu.student.catalog.manager.CatalogManager;
 import ru.open.cu.student.catalog.model.ColumnDefinition;
 import ru.open.cu.student.catalog.model.TableDefinition;
 import ru.open.cu.student.catalog.model.TypeDefinition;
 import ru.open.cu.student.ast.Expr;
-import ru.open.cu.student.ast.TargetEntry;
-import ru.open.cu.student.planner.node.CreateTableNode;
-import ru.open.cu.student.planner.node.InsertNode;
-import ru.open.cu.student.planner.node.LogicalPlanNode;
+import ru.open.cu.student.planner.node.*;
 
 import java.util.ArrayList;
 import java.util.List;
 
-
-/**
- * Планировщик, преобразующий QueryTree в LogicalPlanNode.
- */
 public class PlannerImpl implements Planner {
 
     private final CatalogManager catalogManager;
@@ -31,26 +25,31 @@ public class PlannerImpl implements Planner {
     public LogicalPlanNode plan(QueryTree queryTree) {
         if (queryTree == null) throw new IllegalArgumentException("QueryTree is null");
 
-        return switch (queryTree.commandType) {
+        return switch (queryTree.getQueryType()) {
             case CREATE -> planCreate(queryTree);
             case INSERT -> planInsert(queryTree);
+            case SELECT -> planSelect(queryTree);
         };
     }
 
-    // ---------- CREATE ----------
     private LogicalPlanNode planCreate(QueryTree q) {
         String tableName = extractTableName(q);
 
         List<ColumnDefinition> columns = new ArrayList<>();
         int position = 0;
-        for (TargetEntry te : q.targetList) {
-            TypeDefinition type = catalogManager.getTypeByName(te.resultType);
 
-            columns.add(new ColumnDefinition(
-                    type.getOid(),
-                    te.alias,
-                    position++
-            ));
+        List<ColumnDef> createCols = q.getCreateColumns();
+        if (createCols != null) {
+            for (ColumnDef cd : createCols) {
+                String typeName = cd.getTypeName().getName();
+                TypeDefinition type = catalogManager.getTypeByName(typeName);
+
+                columns.add(new ColumnDefinition(
+                        position++,
+                        cd.getColname(),
+                        type.getOid()
+                ));
+            }
         }
 
         TableDefinition tableDef = new TableDefinition(0, tableName, "USER", tableName, 0);
@@ -59,22 +58,49 @@ public class PlannerImpl implements Planner {
         return new CreateTableNode(tableDef);
     }
 
-    // ---------- INSERT ----------
     private LogicalPlanNode planInsert(QueryTree q) {
         String tableName = extractTableName(q);
         TableDefinition tableDef = catalogManager.getTable(tableName);
 
-        List<Expr> values = q.targetList.stream()
-                .map(te -> te.expr)
-                .toList();
+        List<Expr> values = new ArrayList<>();
+        List<?> rawValues = q.getInsertValues();
+        if (rawValues != null) {
+            for (Object v : rawValues) {
+                values.add((Expr) v);
+            }
+        }
 
         return new InsertNode(tableDef, values);
     }
 
+    private LogicalPlanNode planSelect(QueryTree q) {
+        String tableName = extractTableName(q);
+        TableDefinition tableDef = catalogManager.getTable(tableName);
+
+        LogicalPlanNode currentNode = new ScanNode(tableDef);
+
+        Expr where = q.getFilter();
+        if (where != null) {
+            currentNode = new FilterNode(currentNode, where);
+        }
+
+        List<?> targets = q.getTargetColumns();
+        if (targets != null && !targets.isEmpty()) {
+            currentNode = new ProjectNode(currentNode, (List<TargetEntry>) targets);
+        }
+
+        return currentNode;
+    }
 
     private String extractTableName(QueryTree q) {
-        if (q.rangeTable != null && !q.rangeTable.isEmpty() && q.rangeTable.get(0).tableName != null) {
-            return q.rangeTable.get(0).tableName;
+        if (q.getFromTables() != null && !q.getFromTables().isEmpty() && q.getFromTables().get(0) != null) {
+            return q.getFromTables().get(0).getName();
+        }
+        if (q.getCreateTable() != null && q.getCreateTable().getName() != null && !q.getCreateTable().getName().isEmpty()) {
+            return q.getCreateTable().getName();
+        }
+        if (q.getInsertTable() != null && q.getInsertTable().getName() != null && !q.getInsertTable().getName().isEmpty()) {
+            return q.getInsertTable().getName();
         }
         throw new IllegalArgumentException("Cannot determine table name");
     }

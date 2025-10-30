@@ -5,10 +5,6 @@ import ru.open.cu.student.catalog.model.TableDefinition;
 
 import java.util.List;
 
-/**
- * Логический узел CREATE TABLE.
- * Хранит готовый объект Table.
- */
 public class CreateTableNode extends LogicalPlanNode {
 
     private final TableDefinition tableDefinition;
@@ -16,7 +12,7 @@ public class CreateTableNode extends LogicalPlanNode {
     public CreateTableNode(TableDefinition tableDefinition) {
         super("CreateTable");
         this.tableDefinition = tableDefinition;
-        this.outputColumns = List.of(); // CREATE не возвращает данных
+        this.outputColumns = List.of();
     }
 
     public TableDefinition getTableDefinition() {

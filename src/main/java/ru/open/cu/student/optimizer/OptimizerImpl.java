@@ -1,26 +1,30 @@
 package ru.open.cu.student.optimizer;
 
-
-import ru.open.cu.student.optimizer.node.PhysicalCreateNode;
-import ru.open.cu.student.optimizer.node.PhysicalInsertNode;
-import ru.open.cu.student.optimizer.node.PhysicalPlanNode;
-import ru.open.cu.student.planner.node.CreateTableNode;
-import ru.open.cu.student.planner.node.InsertNode;
-import ru.open.cu.student.planner.node.LogicalPlanNode;
+import ru.open.cu.student.optimizer.node.*;
+import ru.open.cu.student.planner.node.*;
 
 public class OptimizerImpl implements Optimizer {
 
     @Override
     public PhysicalPlanNode optimize(LogicalPlanNode logicalPlan) {
+        if (logicalPlan == null) {
+            throw new IllegalArgumentException("Logical plan is null");
+        }
 
-        // --- CREATE TABLE ---
         if (logicalPlan instanceof CreateTableNode ln) {
             return new PhysicalCreateNode(ln.getTableDefinition());
 
-            // --- INSERT ---
         } else if (logicalPlan instanceof InsertNode ln) {
             return new PhysicalInsertNode(ln.getTableDefinition(), ln.getValues());
 
+        } else if (logicalPlan instanceof ScanNode ln) {
+            return new PhysicalSeqScanNode(ln.getTableDefinition());
+        } else if (logicalPlan instanceof FilterNode ln) {
+            PhysicalPlanNode physicalChild = optimize(ln.getChild());
+            return new PhysicalFilterNode(physicalChild, ln.getPredicate());
+        } else if (logicalPlan instanceof ProjectNode ln) {
+            PhysicalPlanNode physicalChild = optimize(ln.getChild());
+            return new PhysicalProjectNode(physicalChild, ln.getTargetList());
         }
 
         throw new UnsupportedOperationException(

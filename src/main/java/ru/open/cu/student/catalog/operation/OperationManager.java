@@ -4,8 +4,9 @@ import java.util.List;
 
 public interface OperationManager {
 
-    void insert(String tableName, List<Object> values);
+    void insert(String tableName, Object... values);
 
     List<Object> select(String tableName, List<String> columnNames);
 
+    List<List<Object>> selectAll(String table);
 }

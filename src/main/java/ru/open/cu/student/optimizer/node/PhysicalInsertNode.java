@@ -6,10 +6,6 @@ import ru.open.cu.student.ast.Expr;
 
 import java.util.List;
 
-/**
- * Физический узел INSERT INTO table VALUES (...).
- * Хранит готовый объект Table и список значений.
- */
 public class PhysicalInsertNode extends PhysicalPlanNode {
 
     private final TableDefinition tableDefinition;

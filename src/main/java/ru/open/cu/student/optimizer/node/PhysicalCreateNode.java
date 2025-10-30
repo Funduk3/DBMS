@@ -3,10 +3,6 @@ package ru.open.cu.student.optimizer.node;
 
 import ru.open.cu.student.catalog.model.TableDefinition;
 
-/**
- * CREATE TABLE node — создание таблицы в хранилище.
- * Содержит уже готовый объект Table.
- */
 public class PhysicalCreateNode extends PhysicalPlanNode {
 
     private final TableDefinition tableDefinition;

@@ -2,6 +2,7 @@ package ru.open.cu.student.catalog.manager;
 
 import ru.open.cu.student.catalog.model.TableDefinition;
 import ru.open.cu.student.catalog.model.ColumnDefinition;
+import ru.open.cu.student.catalog.model.TypeDefinition;
 
 import java.util.List;
 
@@ -15,4 +16,5 @@ public interface CatalogManager {
 
     List<TableDefinition> listTables();
 
+    TypeDefinition getTypeByName(String name);
 }

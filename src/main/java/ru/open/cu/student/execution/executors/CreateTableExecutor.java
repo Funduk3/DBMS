@@ -4,10 +4,6 @@ package ru.open.cu.student.execution.executors;
 import ru.open.cu.student.catalog.manager.CatalogManager;
 import ru.open.cu.student.catalog.model.TableDefinition;
 
-/**
- * Исполнитель CREATE TABLE.
- * Просто вызывает CatalogManager.createTable() с готовой таблицей.
- */
 public class CreateTableExecutor implements Executor {
 
     private final CatalogManager catalogManager;

@@ -8,10 +8,6 @@ import ru.open.cu.student.ast.Expr;
 
 import java.util.List;
 
-/**
- * Исполнитель для операции INSERT INTO table VALUES (...).
- * Получает объект Table и конкретные значения.
- */
 public class InsertExecutor implements Executor {
 
     private final OperationManager operationManager;
@@ -29,12 +25,10 @@ public class InsertExecutor implements Executor {
 
     @Override
     public Object next() {
-        // Преобразуем Expr в Object (предполагаем AConst)
         List<Object> rowValues = values.stream()
                 .map(expr -> ((AConst) expr).value)
                 .toList();
 
-        // Используем новый метод insert(OperationManager)
         operationManager.insert(tableDefinition.getName(), rowValues);
 
         return null;
