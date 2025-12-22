@@ -1,6 +1,6 @@
-package ru.open.cu.student.ast;
+package ru.open.cu.student.parser.nodes;
 
-public class AExpr extends Expr {
+public class AExpr implements Expr {
     public String op;          // оператор: "=", ">", "+", etc.
     public Expr left;          // левый операнд
     public Expr right;         // правый операнд

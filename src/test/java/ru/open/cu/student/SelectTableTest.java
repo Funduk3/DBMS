@@ -2,7 +2,6 @@ package ru.open.cu.student;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import ru.open.cu.student.ast.*;
 import ru.open.cu.student.catalog.model.ColumnDefinition;
 import ru.open.cu.student.catalog.model.TableDefinition;
 import ru.open.cu.student.catalog.manager.CatalogManager;
@@ -14,21 +13,29 @@ import ru.open.cu.student.execution.ExecutorFactory;
 import ru.open.cu.student.execution.ExecutorFactoryImpl;
 import ru.open.cu.student.execution.QueryExecutionEngine;
 import ru.open.cu.student.execution.QueryExecutionEngineImpl;
+import ru.open.cu.student.memory.buffer.BufferPoolManager;
+import ru.open.cu.student.memory.buffer.DefaultBufferPoolManager;
 import ru.open.cu.student.memory.manager.HeapPageFileManager;
 import ru.open.cu.student.memory.manager.PageFileManager;
+import ru.open.cu.student.memory.replacer.ClockReplacer;
+import ru.open.cu.student.memory.replacer.Replacer;
 import ru.open.cu.student.optimizer.Optimizer;
 import ru.open.cu.student.optimizer.OptimizerImpl;
 import ru.open.cu.student.optimizer.node.PhysicalPlanNode;
+import ru.open.cu.student.parser.nodes.AConst;
+import ru.open.cu.student.parser.nodes.AExpr;
+import ru.open.cu.student.parser.nodes.ColumnRef;
 import ru.open.cu.student.planner.Planner;
 import ru.open.cu.student.planner.PlannerImpl;
 import ru.open.cu.student.planner.node.LogicalPlanNode;
+import ru.open.cu.student.semantic.QueryTree;
 
 import java.util.ArrayList;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-class SelectTest {
+class SelectTableTest {
 
     private CatalogManager catalogManager;
     private OperationManager operationManager;
@@ -37,11 +44,15 @@ class SelectTest {
     private ExecutorFactory executorFactory;
     private QueryExecutionEngine executionEngine;
     private PageFileManager pageFileManager;
+    private DefaultBufferPoolManager bufferPoolManager;
+    private Replacer replacer;
 
     @BeforeEach
     void setUp() {
+        replacer = new ClockReplacer(10);
         pageFileManager = new HeapPageFileManager();
-        catalogManager = new CatalogManagerImpl(pageFileManager);
+        bufferPoolManager = new DefaultBufferPoolManager(10, pageFileManager, replacer);
+        catalogManager = new CatalogManagerImpl(bufferPoolManager, pageFileManager);
         operationManager = new OperationManagerImpl((CatalogManagerImpl) catalogManager, pageFileManager);
         planner = new PlannerImpl(catalogManager);
         optimizer = new OptimizerImpl();

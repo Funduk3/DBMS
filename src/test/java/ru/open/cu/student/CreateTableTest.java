@@ -2,10 +2,12 @@ package ru.open.cu.student;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import ru.open.cu.student.ast.ColumnDef;
-import ru.open.cu.student.ast.QueryTree;
-import ru.open.cu.student.ast.TypeName;
-import ru.open.cu.student.catalog.model.TableDefinition;
+import ru.open.cu.student.catalog.model.ColumnDefinition;
+import ru.open.cu.student.memory.buffer.BufferPoolManager;
+import ru.open.cu.student.memory.buffer.DefaultBufferPoolManager;
+import ru.open.cu.student.memory.replacer.ClockReplacer;
+import ru.open.cu.student.memory.replacer.Replacer;
+import ru.open.cu.student.semantic.QueryTree;
 import ru.open.cu.student.catalog.manager.CatalogManager;
 import ru.open.cu.student.catalog.manager.CatalogManagerImpl;
 import ru.open.cu.student.catalog.operation.OperationManager;
@@ -38,11 +40,15 @@ class CreateTableTest {
     private ExecutorFactory executorFactory;
     private QueryExecutionEngine executionEngine;
     private PageFileManager pageFileManager;
+    private Replacer replacer;
+    private DefaultBufferPoolManager bufferPoolManager;
 
     @BeforeEach
     void setUp() {
+        replacer = new ClockReplacer(10);
         pageFileManager = new HeapPageFileManager();
-        catalogManager = new CatalogManagerImpl(pageFileManager);
+        bufferPoolManager = new DefaultBufferPoolManager(10, pageFileManager, replacer);
+        catalogManager = new CatalogManagerImpl(bufferPoolManager, pageFileManager);
         operationManager = new OperationManagerImpl((CatalogManagerImpl) catalogManager, pageFileManager);
         planner = new PlannerImpl(catalogManager);
         optimizer = new OptimizerImpl();
@@ -52,15 +58,13 @@ class CreateTableTest {
 
     @Test
     void testCreateTableSuccess() {
-        TableDefinition createTable = new TableDefinition(
-                1, "users", "BASE TABLE", "users_file", 0
-        );
+        String tableName = "users";
 
-        List<ColumnDef> createColumns = new ArrayList<>();
-        createColumns.add(new ColumnDef("id", new TypeName("INT64")));
-        createColumns.add(new ColumnDef("name", new TypeName("VARCHAR")));
+        List<ColumnDefinition> columns = new ArrayList<>();
+        columns.add(new ColumnDefinition(0, "id", catalogManager.getTypeByName("INT64").getOid()));
+        columns.add(new ColumnDefinition(1, "name", catalogManager.getTypeByName("VARCHAR").getOid()));
 
-        QueryTree createQuery = new QueryTree(createTable, createColumns, QueryTree.QueryType.CREATE);
+        QueryTree createQuery = new QueryTree(tableName, columns, QueryTree.QueryType.CREATE);
 
         LogicalPlanNode logicalPlan = planner.plan(createQuery);
         assertNotNull(logicalPlan);
@@ -81,24 +85,22 @@ class CreateTableTest {
 
     @Test
     void testCreateTableWithMultipleTypes() {
-        TableDefinition createTable = new TableDefinition(
-                2, "products2", "BASE TABLE", "products_file", 0
-        );
+        String tableName = "products1";
 
-        List<ColumnDef> createColumns = new ArrayList<>();
-        createColumns.add(new ColumnDef("id", new TypeName("INT64")));
-        createColumns.add(new ColumnDef("price", new TypeName("INT64")));
-        createColumns.add(new ColumnDef("name", new TypeName("VARCHAR")));
-        createColumns.add(new ColumnDef("available", new TypeName("VARCHAR")));
+        List<ColumnDefinition> columns = new ArrayList<>();
+        columns.add(new ColumnDefinition(0, "id", catalogManager.getTypeByName("INT64").getOid()));
+        columns.add(new ColumnDefinition(1, "price", catalogManager.getTypeByName("INT64").getOid()));
+        columns.add(new ColumnDefinition(2, "name", catalogManager.getTypeByName("VARCHAR").getOid()));
+        columns.add(new ColumnDefinition(3, "available", catalogManager.getTypeByName("VARCHAR").getOid()));
 
-        QueryTree createQuery = new QueryTree(createTable, createColumns, QueryTree.QueryType.CREATE);
+        QueryTree createQuery = new QueryTree(tableName, columns, QueryTree.QueryType.CREATE);
 
         LogicalPlanNode logicalPlan = planner.plan(createQuery);
         PhysicalPlanNode physicalPlan = optimizer.optimize(logicalPlan);
         Executor executor = executorFactory.createExecutor(physicalPlan);
         executionEngine.execute(executor);
 
-        var table = catalogManager.getTable("products2");
+        var table = catalogManager.getTable("products1");
         assertNotNull(table);
         assertEquals(4, table.getColumns().size());
         assertEquals("id", table.getColumns().get(0).getName());
@@ -109,28 +111,27 @@ class CreateTableTest {
 
     @Test
     void testCreateTableWithInvalidType() {
-        TableDefinition createTable = new TableDefinition(
-                3, "invalid_table", "BASE TABLE", "invalid_file", 0
-        );
+        String tableName = "invalid_table";
 
-        List<ColumnDef> createColumns = new ArrayList<>();
-        createColumns.add(new ColumnDef("id", new TypeName("not_a_real_type")));
+        // Пытаемся создать колонку с несуществующим типом
+        // Это должно вызвать исключение при получении типа
+        assertThrows(Exception.class, () -> {
+            List<ColumnDefinition> columns = new ArrayList<>();
+            columns.add(new ColumnDefinition(0, "id", catalogManager.getTypeByName("not_a_real_type").getOid()));
 
-        QueryTree createQuery = new QueryTree(createTable, createColumns, QueryTree.QueryType.CREATE);
-
-        assertThrows(Exception.class, () -> planner.plan(createQuery));
+            QueryTree createQuery = new QueryTree(tableName, columns, QueryTree.QueryType.CREATE);
+            planner.plan(createQuery);
+        });
     }
 
     @Test
     void testCreateTableWithoutName() {
-        TableDefinition createTable = new TableDefinition(
-                4, "", "BASE TABLE", "empty_file", 0
-        );
+        String tableName = "";
 
-        List<ColumnDef> createColumns = new ArrayList<>();
-        createColumns.add(new ColumnDef("id", new TypeName("int4")));
+        List<ColumnDefinition> columns = new ArrayList<>();
+        columns.add(new ColumnDefinition(0, "id", catalogManager.getTypeByName("INT64").getOid()));
 
-        QueryTree createQuery = new QueryTree(createTable, createColumns, QueryTree.QueryType.CREATE);
+        QueryTree createQuery = new QueryTree(tableName, columns, QueryTree.QueryType.CREATE);
 
         assertThrows(IllegalArgumentException.class, () -> planner.plan(createQuery));
     }

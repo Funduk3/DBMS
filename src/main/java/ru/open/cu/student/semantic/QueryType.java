@@ -1,4 +1,4 @@
-package ru.open.cu.student.ast;
+package ru.open.cu.student.semantic;
 
 public enum QueryType {
     CREATE,

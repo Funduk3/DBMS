@@ -3,7 +3,10 @@ package ru.open.cu.student.catalog.manager;
 import ru.open.cu.student.catalog.model.ColumnDefinition;
 import ru.open.cu.student.catalog.model.TableDefinition;
 import ru.open.cu.student.catalog.model.TypeDefinition;
+import ru.open.cu.student.index.Index;
+import ru.open.cu.student.memory.buffer.DefaultBufferPoolManager;
 import ru.open.cu.student.memory.manager.PageFileManager;
+import ru.open.cu.student.memory.model.BufferSlot;
 import ru.open.cu.student.memory.page.HeapPage;
 import ru.open.cu.student.memory.page.Page;
 
@@ -25,17 +28,24 @@ public class CatalogManagerImpl implements CatalogManager {
     private static final String COLUMN_DEFS_FILE = "column_definitions.dat";
     private static final String TYPE_DEFS_FILE = "type_definitions.dat";
 
+    private final DefaultBufferPoolManager bufferPoolManager;
     private final PageFileManager pageFileManager;
 
     private final Map<Integer, TableDefinition> tablesById = new ConcurrentHashMap<>();
     private final Map<String, TableDefinition> tablesByName = new ConcurrentHashMap<>();
     private final Map<Integer, List<ColumnDefinition>> columnsByTableOid = new ConcurrentHashMap<>();
     private final Map<Integer, TypeDefinition> typesById = new ConcurrentHashMap<>();
+    private final Map<String, Index> indexesByName = new ConcurrentHashMap<>();
 
     private final Path catalogPath;
     private final Path dataPath;
 
-    public CatalogManagerImpl(PageFileManager pageFileManager) {
+    private final int tableDefsFileId;
+    private final int columnDefsFileId;
+    private final int typeDefsFileId;
+
+    public CatalogManagerImpl(DefaultBufferPoolManager bufferPoolManager, PageFileManager pageFileManager) {
+        this.bufferPoolManager = bufferPoolManager;
         this.pageFileManager = pageFileManager;
         this.catalogPath = Paths.get(CATALOG_DIR);
         this.dataPath = Paths.get(DATA_DIR);
@@ -44,8 +54,12 @@ public class CatalogManagerImpl implements CatalogManager {
             Files.createDirectories(catalogPath);
             Files.createDirectories(dataPath);
         } catch (IOException e) {
-            throw new RuntimeException("Failed to create directories", e);
+            throw new RuntimeException(e);
         }
+
+        this.tableDefsFileId = bufferPoolManager.registerFile(catalogPath.resolve(TABLE_DEFS_FILE));
+        this.columnDefsFileId = bufferPoolManager.registerFile(catalogPath.resolve(COLUMN_DEFS_FILE));
+        this.typeDefsFileId = bufferPoolManager.registerFile(catalogPath.resolve(TYPE_DEFS_FILE));
 
         initializeTypes();
         loadAll();
@@ -54,9 +68,7 @@ public class CatalogManagerImpl implements CatalogManager {
     private void initializeTypes() {
         Path typePath = catalogPath.resolve(TYPE_DEFS_FILE);
 
-        try {
-            pageFileManager.read(0, typePath);
-        } catch (Exception e) {
+        if (!Files.exists(typePath)) {
             typesById.put(1, new TypeDefinition(1, "INT64", 8));
             typesById.put(2, new TypeDefinition(2, "VARCHAR", -1));
             saveTypes();
@@ -65,13 +77,12 @@ public class CatalogManagerImpl implements CatalogManager {
 
     public synchronized TableDefinition createTable(TableDefinition tableDefinition, List<ColumnDefinition> columns) {
         if (tablesByName.containsKey(tableDefinition.getName())) {
-            throw new IllegalArgumentException("Table already exists: " + tableDefinition.getName());
+            throw new IllegalArgumentException();
         }
 
         for (ColumnDefinition column : columns) {
-            var c = column.getTypeOid();
             if (!typesById.containsKey(column.getTypeOid())) {
-                throw new IllegalArgumentException("Type not found: " + column.getTypeOid());
+                throw new IllegalArgumentException();
             }
         }
 
@@ -80,9 +91,9 @@ public class CatalogManagerImpl implements CatalogManager {
 
         List<ColumnDefinition> tableColumns = new ArrayList<>(columns);
         columnsByTableOid.put(tableDefinition.getOid(), tableColumns);
+        tableDefinition.setColumns(new ArrayList<>(tableColumns));
 
         createEmptyDataFile(tableDefinition);
-
         saveAll();
 
         return tableDefinition;
@@ -98,15 +109,14 @@ public class CatalogManagerImpl implements CatalogManager {
 
         List<ColumnDefinition> tableColumns = new ArrayList<>();
         for (int i = 0; i < columns.size(); i++) {
-            ColumnDefinition srcColumn = columns.get(i);
-            ColumnDefinition newColumn = new ColumnDefinition(
+            ColumnDefinition src = columns.get(i);
+            tableColumns.add(new ColumnDefinition(
                     i,
                     tableOid,
-                    srcColumn.getTypeOid(),
-                    srcColumn.getName(),
+                    src.getTypeOid(),
+                    src.getName(),
                     i
-            );
-            tableColumns.add(newColumn);
+            ));
         }
 
         return createTable(table, tableColumns);
@@ -121,24 +131,20 @@ public class CatalogManagerImpl implements CatalogManager {
                 pageFileManager.write(emptyPage, dataFile);
             }
         } catch (Exception e) {
-            throw new RuntimeException("Failed to create data file for table: " + table.getName(), e);
+            throw new RuntimeException(e);
         }
     }
 
     @Override
     public TableDefinition getTable(String tableName) {
-        TableDefinition table = tablesByName.get(tableName);
-        if (table == null) {
-            throw new IllegalArgumentException("Table not found: " + tableName);
-        }
-        return table;
+        return tablesByName.get(tableName);
     }
 
     @Override
     public ColumnDefinition getColumn(TableDefinition table, String columnName) {
         List<ColumnDefinition> columns = columnsByTableOid.get(table.getOid());
         if (columns == null) {
-            throw new IllegalArgumentException("No columns found for table: " + table.getName());
+            throw new IllegalArgumentException();
         }
 
         for (ColumnDefinition column : columns) {
@@ -147,7 +153,7 @@ public class CatalogManagerImpl implements CatalogManager {
             }
         }
 
-        throw new IllegalArgumentException("Column not found: " + columnName + " in table " + table.getName());
+        throw new IllegalArgumentException();
     }
 
     @Override
@@ -157,10 +163,9 @@ public class CatalogManagerImpl implements CatalogManager {
 
     @Override
     public TypeDefinition getTypeByName(String name) {
-        for (Map.Entry<Integer, TypeDefinition> entry : typesById.entrySet()) {
-            TypeDefinition typeDefinition = entry.getValue();
-            if (typeDefinition.getName().equals(name)) {
-                return typeDefinition;
+        for (TypeDefinition type : typesById.values()) {
+            if (type.getName().equals(name)) {
+                return type;
             }
         }
         return null;
@@ -169,7 +174,7 @@ public class CatalogManagerImpl implements CatalogManager {
     public TypeDefinition getType(int typeOid) {
         TypeDefinition type = typesById.get(typeOid);
         if (type == null) {
-            throw new IllegalArgumentException("Type not found: " + typeOid);
+            throw new IllegalArgumentException();
         }
         return type;
     }
@@ -177,18 +182,35 @@ public class CatalogManagerImpl implements CatalogManager {
     public List<ColumnDefinition> getTableColumns(int oid) {
         List<ColumnDefinition> columns = columnsByTableOid.get(oid);
         if (columns == null) {
-            throw new IllegalArgumentException("No columns found for table OID: " + oid);
+            throw new IllegalArgumentException();
         }
         return new ArrayList<>(columns);
+    }
+
+    public synchronized void registerIndex(Index index) {
+        if (indexesByName.containsKey(index.getName())) {
+            throw new IllegalArgumentException();
+        }
+        indexesByName.put(index.getName(), index);
+    }
+
+    @Override
+    public Index getIndex(String indexName) {
+        return indexesByName.get(indexName);
+    }
+
+    public synchronized void dropIndex(String indexName) {
+        indexesByName.remove(indexName);
+    }
+
+    public List<Index> listIndexes() {
+        return new ArrayList<>(indexesByName.values());
     }
 
     public Path getDataFilePath(TableDefinition table) {
         return dataPath.resolve(table.getFileNode());
     }
 
-    /**
-     * Загрузка всех метаданных при старте системы
-     */
     private void loadAll() {
         loadTypes();
         loadTables();
@@ -199,20 +221,17 @@ public class CatalogManagerImpl implements CatalogManager {
         tablesById.clear();
         tablesByName.clear();
 
-        Path tablePath = catalogPath.resolve(TABLE_DEFS_FILE);
         int pageId = 0;
-
         while (true) {
             try {
-                Page page = pageFileManager.read(pageId, tablePath);
+                BufferSlot slot = bufferPoolManager.getPage(tableDefsFileId, pageId);
+                Page page = slot.getPage();
 
                 for (int i = 0; i < page.size(); i++) {
-                    byte[] data = page.read(i);
-                    TableDefinition table = TableDefinition.fromBytes(data);
+                    TableDefinition table = TableDefinition.fromBytes(page.read(i));
                     tablesById.put(table.getOid(), table);
                     tablesByName.put(table.getName(), table);
                 }
-
                 pageId++;
             } catch (Exception e) {
                 break;
@@ -223,19 +242,16 @@ public class CatalogManagerImpl implements CatalogManager {
     private void loadTypes() {
         typesById.clear();
 
-        Path typePath = catalogPath.resolve(TYPE_DEFS_FILE);
         int pageId = 0;
-
         while (true) {
             try {
-                Page page = pageFileManager.read(pageId, typePath);
+                BufferSlot slot = bufferPoolManager.getPage(typeDefsFileId, pageId);
+                Page page = slot.getPage();
 
                 for (int i = 0; i < page.size(); i++) {
-                    byte[] data = page.read(i);
-                    TypeDefinition type = TypeDefinition.fromBytes(data);
+                    TypeDefinition type = TypeDefinition.fromBytes(page.read(i));
                     typesById.put(type.getOid(), type);
                 }
-
                 pageId++;
             } catch (Exception e) {
                 break;
@@ -246,22 +262,18 @@ public class CatalogManagerImpl implements CatalogManager {
     private void loadColumns() {
         columnsByTableOid.clear();
 
-        Path columnPath = catalogPath.resolve(COLUMN_DEFS_FILE);
         int pageId = 0;
-
         while (true) {
             try {
-                Page page = pageFileManager.read(pageId, columnPath);
+                BufferSlot slot = bufferPoolManager.getPage(columnDefsFileId, pageId);
+                Page page = slot.getPage();
 
                 for (int i = 0; i < page.size(); i++) {
-                    byte[] data = page.read(i);
-                    ColumnDefinition column = ColumnDefinition.fromBytes(data);
-
+                    ColumnDefinition column = ColumnDefinition.fromBytes(page.read(i));
                     columnsByTableOid
                             .computeIfAbsent(column.getTableOid(), k -> new ArrayList<>())
                             .add(column);
                 }
-
                 pageId++;
             } catch (Exception e) {
                 break;
@@ -286,42 +298,40 @@ public class CatalogManagerImpl implements CatalogManager {
     }
 
     private void saveTables() {
-        Path tablePath = catalogPath.resolve(TABLE_DEFS_FILE);
-        List<TableDefinition> tables = new ArrayList<>(tablesById.values());
-
-        saveObjectsToPages(tablePath, tables, TableDefinition::toBytes);
+        saveObjectsToPages(
+                tableDefsFileId,
+                new ArrayList<>(tablesById.values()),
+                TableDefinition::toBytes
+        );
     }
 
     private void saveTypes() {
-        Path typePath = catalogPath.resolve(TYPE_DEFS_FILE);
-        List<TypeDefinition> types = new ArrayList<>(typesById.values());
-
-        saveObjectsToPages(typePath, types, TypeDefinition::toBytes);
+        saveObjectsToPages(
+                typeDefsFileId,
+                new ArrayList<>(typesById.values()),
+                TypeDefinition::toBytes
+        );
     }
 
     private void saveColumns() {
-        Path columnPath = catalogPath.resolve(COLUMN_DEFS_FILE);
         List<ColumnDefinition> allColumns = new ArrayList<>();
-
-        for (List<ColumnDefinition> columns : columnsByTableOid.values()) {
-            allColumns.addAll(columns);
+        for (List<ColumnDefinition> cols : columnsByTableOid.values()) {
+            allColumns.addAll(cols);
         }
-
-        saveObjectsToPages(columnPath, allColumns, ColumnDefinition::toBytes);
+        saveObjectsToPages(columnDefsFileId, allColumns, ColumnDefinition::toBytes);
     }
 
-    private <T> void saveObjectsToPages(Path filePath, List<T> objects,
+    private <T> void saveObjectsToPages(int fileId, List<T> objects,
                                         java.util.function.Function<T, byte[]> serializer) {
         int pageId = 0;
         Page currentPage = new HeapPage(pageId);
 
         for (T obj : objects) {
             byte[] data = serializer.apply(obj);
-
             try {
                 currentPage.write(data);
             } catch (IllegalArgumentException e) {
-                pageFileManager.write(currentPage, filePath);
+                writePage(fileId, pageId, currentPage);
                 pageId++;
                 currentPage = new HeapPage(pageId);
                 currentPage.write(data);
@@ -329,7 +339,22 @@ public class CatalogManagerImpl implements CatalogManager {
         }
 
         if (currentPage.size() > 0) {
-            pageFileManager.write(currentPage, filePath);
+            writePage(fileId, pageId, currentPage);
+        }
+    }
+
+    private void writePage(int fileId, int pageId, Page page) {
+        try {
+            try {
+                bufferPoolManager.getPage(fileId, pageId);
+                bufferPoolManager.updatePage(fileId, pageId, page);
+            } catch (IOException e) {
+                bufferPoolManager.newPage(fileId, pageId);
+                bufferPoolManager.updatePage(fileId, pageId, page);
+            }
+            bufferPoolManager.flushPage(fileId, pageId);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
         }
     }
 }

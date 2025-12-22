@@ -1,6 +1,6 @@
 package ru.open.cu.student.planner.node;
 
-import ru.open.cu.student.ast.TargetEntry;
+import ru.open.cu.student.parser.nodes.TargetEntry;
 
 import java.util.List;
 import java.util.stream.Collectors;

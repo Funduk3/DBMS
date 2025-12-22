@@ -1,11 +1,11 @@
 package ru.open.cu.student.execution.executors;
 
-import ru.open.cu.student.ast.AConst;
-import ru.open.cu.student.ast.AExpr;
-import ru.open.cu.student.ast.ColumnRef;
-import ru.open.cu.student.ast.Expr;
 import ru.open.cu.student.catalog.model.ColumnDefinition;
 import ru.open.cu.student.catalog.model.TableDefinition;
+import ru.open.cu.student.parser.nodes.AConst;
+import ru.open.cu.student.parser.nodes.AExpr;
+import ru.open.cu.student.parser.nodes.ColumnRef;
+import ru.open.cu.student.parser.nodes.Expr;
 
 import java.util.List;
 

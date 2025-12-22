@@ -1,8 +1,12 @@
 package ru.open.cu.student.execution;
 
 import ru.open.cu.student.catalog.manager.CatalogManager;
+import ru.open.cu.student.catalog.model.TableDefinition;
 import ru.open.cu.student.catalog.operation.OperationManager;
 import ru.open.cu.student.execution.executors.*;
+import ru.open.cu.student.index.IndexType;
+import ru.open.cu.student.index.btree.BPlusTreeIndex;
+import ru.open.cu.student.index.hash.HashIndex;
 import ru.open.cu.student.optimizer.node.*;
 
 public class ExecutorFactoryImpl implements ExecutorFactory {
@@ -54,6 +58,31 @@ public class ExecutorFactoryImpl implements ExecutorFactory {
                     project.getTargetList(),
                     extractTableDefinition(project.getChild())
             );
+        } else if (plan instanceof PhysicalIndexScanNode) {
+            PhysicalIndexScanNode indexNode = (PhysicalIndexScanNode) plan;
+
+            if (indexNode.getIndexType() == IndexType.BTREE) {
+                BPlusTreeIndex index = (BPlusTreeIndex) catalogManager.getIndex(
+                        indexNode.getIndexName()
+                );
+                TableDefinition table = catalogManager.getTable(indexNode.getTableName());
+
+                if (indexNode.hasRange()) {
+                    return new BTreeIndexScanExecutor(operationManager, index, indexNode.getRangeFrom(), indexNode.getRangeTo(), table);
+                } else {
+                    return new BTreeIndexScanExecutor(operationManager, index, indexNode.getValue(), table);
+                }
+            } else if (indexNode.getIndexType() == IndexType.HASH) {
+                HashIndex index = (HashIndex) catalogManager.getIndex(
+                        indexNode.getIndexName()
+                );
+                TableDefinition table = catalogManager.getTable(
+                        indexNode.getTableName()
+                );
+                Comparable searchKey = indexNode.getValue();
+
+                return new HashIndexScanExecutor(operationManager, index, searchKey, table);
+            }
         }
 
         throw new UnsupportedOperationException(

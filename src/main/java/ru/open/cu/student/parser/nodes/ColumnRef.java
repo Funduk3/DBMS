@@ -1,6 +1,6 @@
-package ru.open.cu.student.ast;
+package ru.open.cu.student.parser.nodes;
 
-public class ColumnRef extends Expr {
+public class ColumnRef implements Expr {
     public String table;       // имя таблицы (может быть null)
     public String column;      // имя столбца
 
@@ -15,6 +15,14 @@ public class ColumnRef extends Expr {
 
     @Override
     public String toString() {
-        return "......";
+        return table + " " + column;
+    }
+
+    public String getTable() {
+        return table;
+    }
+
+    public String getColumn() {
+        return column;
     }
 }

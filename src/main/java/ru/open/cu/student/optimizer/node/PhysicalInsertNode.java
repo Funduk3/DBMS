@@ -2,7 +2,7 @@ package ru.open.cu.student.optimizer.node;
 
 
 import ru.open.cu.student.catalog.model.TableDefinition;
-import ru.open.cu.student.ast.Expr;
+import ru.open.cu.student.parser.nodes.Expr;
 
 import java.util.List;
 

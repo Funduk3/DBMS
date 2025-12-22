@@ -1,6 +1,6 @@
 package ru.open.cu.student.planner;
 
-import ru.open.cu.student.ast.QueryTree;
+import ru.open.cu.student.semantic.QueryTree;
 import ru.open.cu.student.planner.node.LogicalPlanNode;
 
 public interface Planner {

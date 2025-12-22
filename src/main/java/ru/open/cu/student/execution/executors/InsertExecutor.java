@@ -3,8 +3,8 @@ package ru.open.cu.student.execution.executors;
 
 import ru.open.cu.student.catalog.model.TableDefinition;
 import ru.open.cu.student.catalog.operation.OperationManager;
-import ru.open.cu.student.ast.AConst;
-import ru.open.cu.student.ast.Expr;
+import ru.open.cu.student.parser.nodes.AConst;
+import ru.open.cu.student.parser.nodes.Expr;
 
 import java.util.List;
 
@@ -25,9 +25,15 @@ public class InsertExecutor implements Executor {
 
     @Override
     public Object next() {
-        List<Object> rowValues = values.stream()
-                .map(expr -> ((AConst) expr).value)
-                .toList();
+        Object[] rowValues = values.stream()
+                .map(expr -> {
+                    if (expr instanceof AConst ac) {
+                        return ac.value;
+                    } else {
+                        throw new IllegalArgumentException("Expected AConst but found " + expr.getClass().getName() + " : " + expr);
+                    }
+                })
+                .toArray();
 
         operationManager.insert(tableDefinition.getName(), rowValues);
 

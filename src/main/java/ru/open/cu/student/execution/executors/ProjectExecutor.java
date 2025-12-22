@@ -1,9 +1,9 @@
 package ru.open.cu.student.execution.executors;
 
-import ru.open.cu.student.ast.AConst;
-import ru.open.cu.student.ast.ColumnRef;
-import ru.open.cu.student.ast.Expr;
-import ru.open.cu.student.ast.TargetEntry;
+import ru.open.cu.student.parser.nodes.AConst;
+import ru.open.cu.student.parser.nodes.ColumnRef;
+import ru.open.cu.student.parser.nodes.Expr;
+import ru.open.cu.student.parser.nodes.TargetEntry;
 import ru.open.cu.student.catalog.model.ColumnDefinition;
 import ru.open.cu.student.catalog.model.TableDefinition;
 

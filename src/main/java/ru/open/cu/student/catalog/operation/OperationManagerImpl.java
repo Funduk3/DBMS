@@ -4,6 +4,7 @@ import ru.open.cu.student.catalog.manager.CatalogManagerImpl;
 import ru.open.cu.student.catalog.model.ColumnDefinition;
 import ru.open.cu.student.catalog.model.TableDefinition;
 import ru.open.cu.student.catalog.model.TypeDefinition;
+import ru.open.cu.student.index.TID;
 import ru.open.cu.student.memory.manager.PageFileManager;
 import ru.open.cu.student.memory.page.HeapPage;
 import ru.open.cu.student.memory.page.Page;
@@ -117,6 +118,28 @@ public class OperationManagerImpl implements OperationManager {
         }
 
         return result;
+    }
+
+    @Override
+    public List<Object> selectRowByTid(String tableName, TID tid) {
+        TableDefinition tableDef = catalogManager.getTable(tableName);
+        List<ColumnDefinition> columns = catalogManager.getTableColumns(tableDef.getOid());
+
+        Path dataFile = catalogManager.getDataFilePath(tableDef);
+
+        try {
+            Page page = pageFileManager.read(tid.pageId(), dataFile);
+
+            if (!page.isValid() || tid.slotId() >= page.size()) {
+                return null;
+            }
+
+            byte[] rowData = page.read(tid.slotId());
+
+            return deserializeRow(columns, rowData);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to read row by TID: " + tid, e);
+        }
     }
 
     private byte[] serializeRow(List<ColumnDefinition> columns, Object[] values) {

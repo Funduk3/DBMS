@@ -1,6 +1,6 @@
 package ru.open.cu.student.optimizer.node;
 
-import ru.open.cu.student.ast.Expr;
+import ru.open.cu.student.parser.nodes.Expr;
 
 public class PhysicalFilterNode extends PhysicalPlanNode {
 

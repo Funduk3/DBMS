@@ -1,7 +1,8 @@
-package ru.open.cu.student.ast;
+package ru.open.cu.student.semantic;
 
 import ru.open.cu.student.catalog.model.ColumnDefinition;
 import ru.open.cu.student.catalog.model.TableDefinition;
+import ru.open.cu.student.parser.nodes.*;
 
 import java.util.List;
 import java.util.stream.Collectors;
@@ -13,8 +14,9 @@ public class QueryTree {
     private AExpr filter;
     private List<Object> insertValues;
     private TableDefinition insertTable;
-    private TableDefinition createTable;
-    private List<ColumnDef> createColumns;
+
+    private String createTableName;
+    private List<ColumnDefinition> createColumns;
 
     public enum QueryType {
         SELECT, INSERT, CREATE
@@ -27,20 +29,23 @@ public class QueryTree {
         this.filter = filter;
     }
 
-    @SuppressWarnings("unchecked")
-    public QueryTree(TableDefinition table, List<?> data, QueryType type) {
-        if (type.equals(QueryType.INSERT)) {
-            this.queryType = QueryType.INSERT;
-            this.insertTable = table;
-            this.insertValues = (List<Object>) data;
-            this.fromTables = List.of(table);
-        } else if (type.equals(QueryType.CREATE)) {
-            this.queryType = QueryType.CREATE;
-            this.createTable = table;
-            this.createColumns = (List<ColumnDef>) data;
-        } else {
-            throw new IllegalArgumentException("Unsupported query type for this constructor: " + type);
+    public QueryTree(TableDefinition table, List<Object> values, QueryType type) {
+        if (type != QueryType.INSERT) {
+            throw new IllegalArgumentException("This constructor is only for INSERT queries");
         }
+        this.queryType = QueryType.INSERT;
+        this.insertTable = table;
+        this.insertValues = values;
+        this.fromTables = List.of(table);
+    }
+
+    public QueryTree(String tableName, List<ColumnDefinition> columns, QueryType type) {
+        if (type != QueryType.CREATE) {
+            throw new IllegalArgumentException("This constructor is only for CREATE queries");
+        }
+        this.queryType = QueryType.CREATE;
+        this.createTableName = tableName;
+        this.createColumns = columns;
     }
 
     public QueryType getQueryType() {
@@ -68,11 +73,11 @@ public class QueryTree {
                 (fromTables != null && !fromTables.isEmpty() ? fromTables.get(0) : null);
     }
 
-    public TableDefinition getCreateTable() {
-        return createTable;
+    public String getCreateTableName() {
+        return createTableName;
     }
 
-    public List<ColumnDef> getCreateColumns() {
+    public List<ColumnDefinition> getCreateColumns() {
         return createColumns;
     }
 
@@ -85,7 +90,7 @@ public class QueryTree {
             case SELECT:
                 sb.append("├── targetColumns: [");
                 sb.append(targetColumns.stream()
-                        .map(c -> c.getName())
+                        .map(ColumnDefinition::getName)
                         .collect(Collectors.joining(", ")));
                 sb.append("]\n");
 
@@ -106,10 +111,10 @@ public class QueryTree {
                 break;
 
             case CREATE:
-                sb.append("├── table: ").append(createTable.getName()).append("\n");
+                sb.append("├── tableName: ").append(createTableName).append("\n");
                 sb.append("└── columns: [");
                 sb.append(createColumns.stream()
-                        .map(cd -> cd.colname + ":" + cd.typeName.getName())
+                        .map(cd -> cd.getName() + ":" + cd.getTypeOid())
                         .collect(Collectors.joining(", ")));
                 sb.append("]");
                 break;

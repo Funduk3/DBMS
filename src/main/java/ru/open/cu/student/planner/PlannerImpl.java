@@ -1,13 +1,12 @@
 package ru.open.cu.student.planner;
 
-import ru.open.cu.student.ast.QueryTree;
-import ru.open.cu.student.ast.ColumnDef;
-import ru.open.cu.student.ast.TargetEntry;
+import ru.open.cu.student.parser.nodes.ColumnRef;
+import ru.open.cu.student.parser.nodes.Expr;
+import ru.open.cu.student.semantic.QueryTree;
+import ru.open.cu.student.parser.nodes.TargetEntry;
 import ru.open.cu.student.catalog.manager.CatalogManager;
 import ru.open.cu.student.catalog.model.ColumnDefinition;
 import ru.open.cu.student.catalog.model.TableDefinition;
-import ru.open.cu.student.catalog.model.TypeDefinition;
-import ru.open.cu.student.ast.Expr;
 import ru.open.cu.student.planner.node.*;
 
 import java.util.ArrayList;
@@ -33,23 +32,14 @@ public class PlannerImpl implements Planner {
     }
 
     private LogicalPlanNode planCreate(QueryTree q) {
-        String tableName = extractTableName(q);
+        String tableName = q.getCreateTableName();
+        List<ColumnDefinition> columns = q.getCreateColumns();
 
-        List<ColumnDefinition> columns = new ArrayList<>();
-        int position = 0;
-
-        List<ColumnDef> createCols = q.getCreateColumns();
-        if (createCols != null) {
-            for (ColumnDef cd : createCols) {
-                String typeName = cd.getTypeName().getName();
-                TypeDefinition type = catalogManager.getTypeByName(typeName);
-
-                columns.add(new ColumnDefinition(
-                        position++,
-                        cd.getColname(),
-                        type.getOid()
-                ));
-            }
+        if (tableName == null || tableName.isEmpty()) {
+            throw new IllegalArgumentException("Table name is required for CREATE");
+        }
+        if (columns == null || columns.isEmpty()) {
+            throw new IllegalArgumentException("Columns are required for CREATE");
         }
 
         TableDefinition tableDef = new TableDefinition(0, tableName, "USER", tableName, 0);
@@ -59,11 +49,15 @@ public class PlannerImpl implements Planner {
     }
 
     private LogicalPlanNode planInsert(QueryTree q) {
-        String tableName = extractTableName(q);
-        TableDefinition tableDef = catalogManager.getTable(tableName);
+        TableDefinition tableDef = q.getInsertTable();
+
+        if (tableDef == null) {
+            throw new IllegalArgumentException("Table definition is required for INSERT");
+        }
 
         List<Expr> values = new ArrayList<>();
-        List<?> rawValues = q.getInsertValues();
+        List<Object> rawValues = q.getInsertValues();
+
         if (rawValues != null) {
             for (Object v : rawValues) {
                 values.add((Expr) v);
@@ -74,9 +68,22 @@ public class PlannerImpl implements Planner {
     }
 
     private LogicalPlanNode planSelect(QueryTree q) {
-        String tableName = extractTableName(q);
-        TableDefinition tableDef = catalogManager.getTable(tableName);
+        List<TableDefinition> tables = q.getFromTables();
 
+        if (tables == null || tables.isEmpty()) {
+            throw new IllegalArgumentException("FROM clause is required for SELECT");
+        }
+
+        // Проверяем существование КАЖДОЙ таблицы из FROM в каталоге
+        for (TableDefinition table : tables) {
+            // Используем существующий метод getTable для проверки
+            if (catalogManager.getTable(table.getName()) == null) {
+                throw new IllegalArgumentException("Table '" + table.getName() + "' does not exist");
+            }
+        }
+
+        // Получаем актуальное определение таблицы из каталога
+        TableDefinition tableDef = catalogManager.getTable(tables.get(0).getName());
         LogicalPlanNode currentNode = new ScanNode(tableDef);
 
         Expr where = q.getFilter();
@@ -84,24 +91,32 @@ public class PlannerImpl implements Planner {
             currentNode = new FilterNode(currentNode, where);
         }
 
-        List<?> targets = q.getTargetColumns();
-        if (targets != null && !targets.isEmpty()) {
-            currentNode = new ProjectNode(currentNode, (List<TargetEntry>) targets);
+        List<ColumnDefinition> targetColumns = q.getTargetColumns();
+        if (targetColumns != null && !targetColumns.isEmpty()) {
+            List<TargetEntry> targets = new ArrayList<>();
+            for (ColumnDefinition col : targetColumns) {
+                boolean columnExists = false;
+                for (ColumnDefinition tableCol : catalogManager.getTableColumns(tableDef.getOid())) {
+                    if (tableCol.getName().equals(col.getName())) {
+                        columnExists = true;
+                        break;
+                    }
+                }
+
+                if (!columnExists) {
+                    throw new IllegalArgumentException("Column '" + col.getName() +
+                            "' does not exist in table '" + tableDef.getName() + "'");
+                }
+
+                ColumnRef columnRef = new ColumnRef(tableDef.getName(), col.getName());
+                String typeName = catalogManager.getType(col.getTypeOid()).getName();
+                TargetEntry entry = new TargetEntry(columnRef, col.getName());
+                entry.resultType = typeName;
+                targets.add(entry);
+            }
+            currentNode = new ProjectNode(currentNode, targets);
         }
 
         return currentNode;
-    }
-
-    private String extractTableName(QueryTree q) {
-        if (q.getFromTables() != null && !q.getFromTables().isEmpty() && q.getFromTables().get(0) != null) {
-            return q.getFromTables().get(0).getName();
-        }
-        if (q.getCreateTable() != null && q.getCreateTable().getName() != null && !q.getCreateTable().getName().isEmpty()) {
-            return q.getCreateTable().getName();
-        }
-        if (q.getInsertTable() != null && q.getInsertTable().getName() != null && !q.getInsertTable().getName().isEmpty()) {
-            return q.getInsertTable().getName();
-        }
-        throw new IllegalArgumentException("Cannot determine table name");
     }
 }
