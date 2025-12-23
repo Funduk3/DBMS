@@ -1,5 +1,6 @@
 package ru.open.cu.student;
 
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import ru.open.cu.student.catalog.model.ColumnDefinition;
@@ -37,18 +38,18 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class SelectTableTest {
 
-    private CatalogManager catalogManager;
-    private OperationManager operationManager;
-    private Planner planner;
-    private Optimizer optimizer;
-    private ExecutorFactory executorFactory;
-    private QueryExecutionEngine executionEngine;
-    private PageFileManager pageFileManager;
-    private DefaultBufferPoolManager bufferPoolManager;
-    private Replacer replacer;
+    private static CatalogManager catalogManager;
+    private static OperationManager operationManager;
+    private static Planner planner;
+    private static Optimizer optimizer;
+    private static ExecutorFactory executorFactory;
+    private static QueryExecutionEngine executionEngine;
+    private static PageFileManager pageFileManager;
+    private static DefaultBufferPoolManager bufferPoolManager;
+    private static Replacer replacer;
 
-    @BeforeEach
-    void setUp() {
+    @BeforeAll
+    static void setUp() {
         replacer = new ClockReplacer(10);
         pageFileManager = new HeapPageFileManager();
         bufferPoolManager = new DefaultBufferPoolManager(10, pageFileManager, replacer);
