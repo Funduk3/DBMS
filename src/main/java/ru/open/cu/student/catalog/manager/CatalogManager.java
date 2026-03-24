@@ -23,4 +23,12 @@ public interface CatalogManager {
     List<ColumnDefinition> getTableColumns(int oid);
 
     Object getIndex(String indexName);
+
+    /**
+     * Найти индекс для указанной таблицы и колонки
+     * @param tableName имя таблицы
+     * @param columnName имя колонки
+     * @return индекс или null, если индекс не найден
+     */
+    Object findIndexByTableAndColumn(String tableName, String columnName);
 }

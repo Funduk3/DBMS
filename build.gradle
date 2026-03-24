@@ -2,6 +2,13 @@ plugins {
     id 'java'
 }
 
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+
 group = 'ru.opencu.database.internal'
 version = '1.0-SNAPSHOT'
 
@@ -20,3 +27,24 @@ dependencies {
 test {
     useJUnitPlatform()
 }
+
+tasks.register('runClient', JavaExec) {
+    group = 'application'
+    description = 'Run TCP SQL client'
+
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'ru.open.cu.student.server.Client'
+
+    standardInput = System.in
+}
+
+tasks.register('runServer', JavaExec) {
+    group = 'application'
+    description = 'Run TCP SQL server'
+
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'ru.open.cu.student.server.Server'
+
+    standardInput = System.in
+}
+

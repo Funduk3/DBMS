@@ -62,18 +62,39 @@ public class OperationManagerImpl implements OperationManager {
         for (int pageId = 0; pageId < tableDef.getPagesCount(); pageId++) {
             try {
                 Page page = pageFileManager.read(pageId, dataFile);
-
                 for (int i = 0; i < page.size(); i++) {
                     byte[] rowData = page.read(i);
-                    List<Object> rowValues = deserializeRow(columns, rowData);
-                    result.add(rowValues);
+                    if (rowData == null || rowData.length == 0) {
+                        continue;
+                    }
+                    if (isEmptyRecord(rowData)) {
+                        continue;
+                    }
+                    try {
+                        List<Object> rowValues = deserializeRow(columns, rowData);
+                        result.add(rowValues);
+                    } catch (Exception e) {
+                        continue;
+                    }
                 }
             } catch (Exception e) {
                 continue;
             }
         }
-
         return result;
+    }
+
+    private boolean isEmptyRecord(byte[] data) {
+        if (data == null || data.length == 0) {
+            return true;
+        }
+
+        for (byte b : data) {
+            if (b != 0) {
+                return false;
+            }
+        }
+        return true;
     }
 
     @Override
@@ -100,23 +121,28 @@ public class OperationManagerImpl implements OperationManager {
                 Page page = pageFileManager.read(pageId, dataFile);
                 for (int i = 0; i < page.size(); i++) {
                     byte[] rowData = page.read(i);
-                    List<Object> rowValues = deserializeRow(allColumns, rowData);
-
-                    if (columnNames != null && !columnNames.isEmpty()) {
-                        List<Object> filteredValues = new ArrayList<>();
-                        for (ColumnDefinition col : selectedColumns) {
-                            filteredValues.add(rowValues.get(col.getPosition()));
+                    if (rowData == null || rowData.length == 0 || isEmptyRecord(rowData)) {
+                        continue;
+                    }
+                    try {
+                        List<Object> rowValues = deserializeRow(allColumns, rowData);
+                        if (columnNames != null && !columnNames.isEmpty()) {
+                            List<Object> filteredValues = new ArrayList<>();
+                            for (ColumnDefinition col : selectedColumns) {
+                                filteredValues.add(rowValues.get(col.getPosition()));
+                            }
+                            result.add(filteredValues);
+                        } else {
+                            result.add(rowValues);
                         }
-                        result.add(filteredValues);
-                    } else {
-                        result.add(rowValues);
+                    } catch (Exception e) {
+                        continue;
                     }
                 }
             } catch (Exception e) {
                 continue;
             }
         }
-
         return result;
     }
 
@@ -169,11 +195,12 @@ public class OperationManagerImpl implements OperationManager {
         dos.writeBoolean(false);
 
         switch (type.getName()) {
+            case "INT":
             case "INT64":
                 if (value instanceof Number) {
                     dos.writeLong(((Number) value).longValue());
                 } else {
-                    throw new IllegalArgumentException("Expected number for INT64, got: " + value.getClass());
+                    throw new IllegalArgumentException("Expected number for " + type.getName() + ", got: " + value.getClass());
                 }
                 break;
 
@@ -221,6 +248,7 @@ public class OperationManagerImpl implements OperationManager {
         }
 
         switch (type.getName()) {
+            case "INT":
             case "INT64":
                 return dis.readLong();
 

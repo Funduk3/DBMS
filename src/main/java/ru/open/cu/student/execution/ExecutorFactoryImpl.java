@@ -1,22 +1,32 @@
 package ru.open.cu.student.execution;
 
 import ru.open.cu.student.catalog.manager.CatalogManager;
+import ru.open.cu.student.catalog.manager.CatalogManagerImpl;
 import ru.open.cu.student.catalog.model.TableDefinition;
 import ru.open.cu.student.catalog.operation.OperationManager;
 import ru.open.cu.student.execution.executors.*;
 import ru.open.cu.student.index.IndexType;
 import ru.open.cu.student.index.btree.BPlusTreeIndex;
 import ru.open.cu.student.index.hash.HashIndex;
+import ru.open.cu.student.memory.manager.PageFileManager;
 import ru.open.cu.student.optimizer.node.*;
 
 public class ExecutorFactoryImpl implements ExecutorFactory {
 
     private final CatalogManager catalogManager;
     private final OperationManager operationManager;
+    private final PageFileManager pageFileManager;
 
     public ExecutorFactoryImpl(CatalogManager catalogManager, OperationManager operationManager) {
         this.catalogManager = catalogManager;
         this.operationManager = operationManager;
+        this.pageFileManager = null; // Для обратной совместимости
+    }
+
+    public ExecutorFactoryImpl(CatalogManager catalogManager, OperationManager operationManager, PageFileManager pageFileManager) {
+        this.catalogManager = catalogManager;
+        this.operationManager = operationManager;
+        this.pageFileManager = pageFileManager;
     }
 
     @Override
@@ -27,6 +37,23 @@ public class ExecutorFactoryImpl implements ExecutorFactory {
 
         if (plan instanceof PhysicalCreateNode create) {
             return new CreateTableExecutor(catalogManager, create.getTableDefinition());
+
+        } else if (plan instanceof PhysicalCreateIndexNode createIndex) {
+            if (pageFileManager == null) {
+                throw new IllegalStateException("PageFileManager is required for CREATE INDEX");
+            }
+            if (!(catalogManager instanceof CatalogManagerImpl)) {
+                throw new IllegalStateException("CatalogManagerImpl is required for CREATE INDEX");
+            }
+            return new CreateIndexExecutor(
+                (CatalogManagerImpl) catalogManager,
+                pageFileManager,
+                operationManager,
+                createIndex.getIndexName(),
+                createIndex.getTableName(),
+                createIndex.getColumnName(),
+                createIndex.getIndexType()
+            );
 
         } else if (plan instanceof PhysicalInsertNode insert) {
             return new InsertExecutor(
@@ -93,6 +120,8 @@ public class ExecutorFactoryImpl implements ExecutorFactory {
     private ru.open.cu.student.catalog.model.TableDefinition extractTableDefinition(PhysicalPlanNode node) {
         if (node instanceof PhysicalSeqScanNode scan) {
             return scan.getTableDefinition();
+        } else if (node instanceof PhysicalIndexScanNode indexScan) {
+            return catalogManager.getTable(indexScan.getTableName());
         } else if (node instanceof PhysicalFilterNode filter) {
             return extractTableDefinition(filter.getChild());
         } else if (node instanceof PhysicalProjectNode project) {

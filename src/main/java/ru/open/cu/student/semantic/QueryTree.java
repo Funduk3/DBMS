@@ -17,9 +17,15 @@ public class QueryTree {
 
     private String createTableName;
     private List<ColumnDefinition> createColumns;
+    
+    // Для CREATE INDEX
+    private String createIndexName;
+    private String createIndexTableName;
+    private String createIndexColumnName;
+    private String createIndexType;
 
     public enum QueryType {
-        SELECT, INSERT, CREATE
+        SELECT, INSERT, CREATE, CREATE_INDEX
     }
 
     public QueryTree(List<ColumnDefinition> targetColumns, List<TableDefinition> fromTables, AExpr filter) {
@@ -81,6 +87,31 @@ public class QueryTree {
         return createColumns;
     }
 
+    // Конструктор для CREATE INDEX
+    public QueryTree(String indexName, String tableName, String columnName, String indexType) {
+        this.queryType = QueryType.CREATE_INDEX;
+        this.createIndexName = indexName;
+        this.createIndexTableName = tableName;
+        this.createIndexColumnName = columnName;
+        this.createIndexType = indexType;
+    }
+
+    public String getCreateIndexName() {
+        return createIndexName;
+    }
+
+    public String getCreateIndexTableName() {
+        return createIndexTableName;
+    }
+
+    public String getCreateIndexColumnName() {
+        return createIndexColumnName;
+    }
+
+    public String getCreateIndexType() {
+        return createIndexType;
+    }
+
     @Override
     public String toString() {
         StringBuilder sb = new StringBuilder();
@@ -117,6 +148,13 @@ public class QueryTree {
                         .map(cd -> cd.getName() + ":" + cd.getTypeOid())
                         .collect(Collectors.joining(", ")));
                 sb.append("]");
+                break;
+
+            case CREATE_INDEX:
+                sb.append("├── indexName: ").append(createIndexName).append("\n");
+                sb.append("├── tableName: ").append(createIndexTableName).append("\n");
+                sb.append("├── columnName: ").append(createIndexColumnName).append("\n");
+                sb.append("└── indexType: ").append(createIndexType);
                 break;
         }
 

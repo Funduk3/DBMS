@@ -86,12 +86,12 @@ public class FilterExecutor implements Executor {
         }
 
         return switch (operator) {
-            case "=" -> left.equals(right);
-            case "!=" -> !left.equals(right);
-            case ">" -> compareNumeric(left, right) > 0;
-            case ">=" -> compareNumeric(left, right) >= 0;
-            case "<" -> compareNumeric(left, right) < 0;
-            case "<=" -> compareNumeric(left, right) <= 0;
+            case "=", "EQ" -> left.equals(right);
+            case "!=", "NEQ" -> !left.equals(right);
+            case ">", "GT" -> compareNumeric(left, right) > 0;
+            case ">=", "GE" -> compareNumeric(left, right) >= 0;
+            case "<", "LT" -> compareNumeric(left, right) < 0;
+            case "<=", "LE" -> compareNumeric(left, right) <= 0;
             default -> false;
         };
     }

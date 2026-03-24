@@ -51,7 +51,7 @@ class CreateTableTest {
         catalogManager = new CatalogManagerImpl(bufferPoolManager, pageFileManager);
         operationManager = new OperationManagerImpl((CatalogManagerImpl) catalogManager, pageFileManager);
         planner = new PlannerImpl(catalogManager);
-        optimizer = new OptimizerImpl();
+        optimizer = new OptimizerImpl(catalogManager);
         executorFactory = new ExecutorFactoryImpl(catalogManager, operationManager);
         executionEngine = new QueryExecutionEngineImpl();
     }

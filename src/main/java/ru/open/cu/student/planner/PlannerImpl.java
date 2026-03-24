@@ -1,5 +1,6 @@
 package ru.open.cu.student.planner;
 
+import ru.open.cu.student.parser.nodes.AConst;
 import ru.open.cu.student.parser.nodes.ColumnRef;
 import ru.open.cu.student.parser.nodes.Expr;
 import ru.open.cu.student.semantic.QueryTree;
@@ -26,6 +27,7 @@ public class PlannerImpl implements Planner {
 
         return switch (queryTree.getQueryType()) {
             case CREATE -> planCreate(queryTree);
+            case CREATE_INDEX -> planCreateIndex(queryTree);
             case INSERT -> planInsert(queryTree);
             case SELECT -> planSelect(queryTree);
         };
@@ -48,6 +50,28 @@ public class PlannerImpl implements Planner {
         return new CreateTableNode(tableDef);
     }
 
+    private LogicalPlanNode planCreateIndex(QueryTree q) {
+        String indexName = q.getCreateIndexName();
+        String tableName = q.getCreateIndexTableName();
+        String columnName = q.getCreateIndexColumnName();
+        String indexType = q.getCreateIndexType();
+
+        if (indexName == null || indexName.isEmpty()) {
+            throw new IllegalArgumentException("Index name is required for CREATE INDEX");
+        }
+        if (tableName == null || tableName.isEmpty()) {
+            throw new IllegalArgumentException("Table name is required for CREATE INDEX");
+        }
+        if (columnName == null || columnName.isEmpty()) {
+            throw new IllegalArgumentException("Column name is required for CREATE INDEX");
+        }
+        if (indexType == null || indexType.isEmpty()) {
+            throw new IllegalArgumentException("Index type is required for CREATE INDEX");
+        }
+
+        return new CreateIndexNode(indexName, tableName, columnName, indexType);
+    }
+
     private LogicalPlanNode planInsert(QueryTree q) {
         TableDefinition tableDef = q.getInsertTable();
 
@@ -60,7 +84,8 @@ public class PlannerImpl implements Planner {
 
         if (rawValues != null) {
             for (Object v : rawValues) {
-                values.add((Expr) v);
+                AConst vv = new AConst(v);
+                values.add(vv);
             }
         }
 

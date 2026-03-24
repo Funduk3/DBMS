@@ -5,6 +5,7 @@ import ru.open.cu.student.catalog.model.ColumnDefinition;
 import ru.open.cu.student.catalog.model.TableDefinition;
 import ru.open.cu.student.parser.nodes.*;
 import ru.open.cu.student.parser.nodes.Statements.CreateStmt;
+import ru.open.cu.student.parser.nodes.Statements.CreateIndexStmt;
 import ru.open.cu.student.parser.nodes.Statements.InsertStmt;
 import ru.open.cu.student.parser.nodes.Statements.SelectStmt;
 
@@ -25,6 +26,8 @@ public class SemanticAnalyzerImpl implements SemanticAnalyzer {
             return analyzeInsert((InsertStmt) ast, catalog);
         } else if (ast instanceof CreateStmt) {
             return analyzeCreate((CreateStmt) ast, catalog);
+        } else if (ast instanceof CreateIndexStmt) {
+            return analyzeCreateIndex((CreateIndexStmt) ast, catalog);
         } else {
             throw new IllegalArgumentException("Unknown statement type: " + ast.getClass().getName());
         }
@@ -149,6 +152,37 @@ public class SemanticAnalyzerImpl implements SemanticAnalyzer {
         return new QueryTree(tableName, catalogColumns, QueryTree.QueryType.CREATE);
     }
 
+    private QueryTree analyzeCreateIndex(CreateIndexStmt stmt, CatalogManager catalog) {
+        String indexName = stmt.getIndexName();
+        String tableName = stmt.getTableName();
+        String columnName = stmt.getColumnName();
+        String indexType = stmt.getIndexType();
+
+        // Проверяем, что таблица существует
+        TableDefinition table = catalog.getTable(tableName);
+        if (table == null) {
+            throw new SemanticException("Table not found: " + tableName);
+        }
+
+        // Проверяем, что колонка существует в таблице
+        ColumnDefinition column = catalog.getColumn(table, columnName);
+        if (column == null) {
+            throw new SemanticException("Column '" + columnName + "' not found in table '" + tableName + "'");
+        }
+
+        // Проверяем, что индекс с таким именем еще не существует
+        if (catalog.getIndex(indexName) != null) {
+            throw new SemanticException("Index '" + indexName + "' already exists");
+        }
+
+        // Валидируем тип индекса
+        if (!"HASH".equals(indexType) && !"BTREE".equals(indexType)) {
+            throw new SemanticException("Invalid index type: " + indexType + ". Expected HASH or BTREE");
+        }
+
+        return new QueryTree(indexName, tableName, columnName, indexType);
+    }
+
     private ColumnDefinition resolveColumn(String colName, List<TableDefinition> tables,
                                            Map<String, TableDefinition> tableMap,
                                            Map<String, String> aliasMap, CatalogManager catalog) {
@@ -216,7 +250,7 @@ public class SemanticAnalyzerImpl implements SemanticAnalyzer {
     private boolean areTypesCompatible(String type1, String type2) {
         if (type1.equals(type2)) return true;
 
-        Set<String> numericTypes = Set.of("INT", "INTEGER", "NUMBER", "DOUBLE", "FLOAT");
+        Set<String> numericTypes = Set.of("INT", "INTEGER", "INT64", "NUMBER", "DOUBLE", "FLOAT");
         if (numericTypes.contains(type1) && numericTypes.contains(type2)) {
             return true;
         }
@@ -296,7 +330,7 @@ public class SemanticAnalyzerImpl implements SemanticAnalyzer {
             switch (targetType.toUpperCase()) {
                 case "INT":
                 case "INTEGER":
-                case "NUMBER":
+                case "INT64":
                     String cleaned = valueStr.replace("'", "").trim();
                     return Integer.parseInt(cleaned);
                 case "STRING":
@@ -322,7 +356,7 @@ public class SemanticAnalyzerImpl implements SemanticAnalyzer {
 
     private boolean isValidType(String type) {
         String upper = type.toUpperCase();
-        return upper.equals("INT64") || upper.equals("INTEGER") ||
+        return upper.equals("INT") || upper.equals("INT64") || upper.equals("INTEGER") ||
                 upper.equals("STRING") || upper.equals("VARCHAR") ||
                 upper.equals("NUMBER") || upper.equals("TEXT") ||
                 upper.equals("DOUBLE") || upper.equals("FLOAT");

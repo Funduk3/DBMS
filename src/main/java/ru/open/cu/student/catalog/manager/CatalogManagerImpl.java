@@ -69,7 +69,7 @@ public class CatalogManagerImpl implements CatalogManager {
         Path typePath = catalogPath.resolve(TYPE_DEFS_FILE);
 
         if (!Files.exists(typePath)) {
-            typesById.put(1, new TypeDefinition(1, "INT64", 8));
+            typesById.put(1, new TypeDefinition(1, "INT", 8));
             typesById.put(2, new TypeDefinition(2, "VARCHAR", -1));
             saveTypes();
         }
@@ -205,6 +205,29 @@ public class CatalogManagerImpl implements CatalogManager {
 
     public List<Index> listIndexes() {
         return new ArrayList<>(indexesByName.values());
+    }
+
+    @Override
+    public Index findIndexByTableAndColumn(String tableName, String columnName) {
+        for (Index index : indexesByName.values()) {
+            if (index.getColumnName().equals(columnName)) {
+                // Проверяем, что индекс относится к нужной таблице
+                // Для этого нужно проверить, что таблица существует и содержит эту колонку
+                TableDefinition table = getTable(tableName);
+                if (table != null) {
+                    try {
+                        ColumnDefinition column = getColumn(table, columnName);
+                        if (column != null) {
+                            return index;
+                        }
+                    } catch (IllegalArgumentException e) {
+                        // Колонка не найдена в таблице
+                        continue;
+                    }
+                }
+            }
+        }
+        return null;
     }
 
     public Path getDataFilePath(TableDefinition table) {

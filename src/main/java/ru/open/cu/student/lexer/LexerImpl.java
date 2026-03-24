@@ -9,7 +9,8 @@ public class LexerImpl implements Lexer {
         return switch (word) {
             case "SELECT", "FROM", "WHERE",
                  "INSERT", "INTO", "VALUES",
-                 "CREATE", "TABLE", "AS" -> true;
+                 "CREATE", "TABLE", "AS",
+                 "INDEX", "ON", "USING", "HASH", "BTREE" -> true;
             default -> false;
         };
     }

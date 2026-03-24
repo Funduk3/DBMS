@@ -48,6 +48,14 @@ public class HeapPage implements Page {
         return data.getShort(8) & 0xFFFF;
     }
 
+    public boolean isSlotValid(int index) {
+        if (index < 0 || index >= size()) {
+            return false;
+        }
+        var length = data.getShort(HEADER_SIZE + index * 4 + 2) & 0xFFFF;
+        return length > 0;
+    }
+
     @Override
     public boolean isValid() {
         return data.getInt(0) == 0xDBDB01;
@@ -57,7 +65,9 @@ public class HeapPage implements Page {
     public byte[] read(int index) {
         var offset = data.getShort(HEADER_SIZE + index * 4) & 0xFFFF;
         var length = data.getShort(HEADER_SIZE + index * 4 + 2) & 0xFFFF;
-
+        if (length == 0) {
+            return null;
+        }
         var result = new byte[length];
         data.get(offset, result);
         return result;

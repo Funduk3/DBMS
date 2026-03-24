@@ -3,6 +3,7 @@ package ru.open.cu.student.parser;
 import ru.open.cu.student.lexer.Token;
 import ru.open.cu.student.parser.nodes.*;
 import ru.open.cu.student.parser.nodes.Statements.CreateStmt;
+import ru.open.cu.student.parser.nodes.Statements.CreateIndexStmt;
 import ru.open.cu.student.parser.nodes.Statements.InsertStmt;
 import ru.open.cu.student.parser.nodes.Statements.SelectStmt;
 
@@ -161,11 +162,14 @@ public class ParserImpl implements Parser {
         List<ResTarget> valuesClause = new ArrayList<>();
         RangeVar tableName = null;
 
+        // Parse INTO keyword
         if (offset < tokens.size() && tokens.get(offset).getType().equals("INTO")) {
             offset++;
         } else {
             throw new IllegalArgumentException("Expected INTO keyword in INSERT statement");
         }
+
+        // Parse table name
         if (offset < tokens.size() && tokens.get(offset).getType().equals("IDENT")) {
             tableName = new RangeVar(null, tokens.get(offset).getValue(), null);
             offset++;
@@ -173,6 +177,36 @@ public class ParserImpl implements Parser {
             throw new IllegalArgumentException("Expected table name in INSERT statement");
         }
 
+        // Parse optional column list: (col1, col2, ...)
+        if (offset < tokens.size() && tokens.get(offset).getType().equals("LPAREN")) {
+            offset++;
+
+            while (offset < tokens.size() && !tokens.get(offset).getType().equals("RPAREN")) {
+                if (tokens.get(offset).getType().equals("COMMA")) {
+                    offset++;
+                    continue;
+                }
+                if (tokens.get(offset).getType().equals("IDENT")) {
+                    intoClause.add(new ResTarget(new ColumnRef(tokens.get(offset).getValue()), null));
+                    offset++;
+                }
+            }
+
+            if (offset < tokens.size() && tokens.get(offset).getType().equals("RPAREN")) {
+                offset++;
+            } else {
+                throw new IllegalArgumentException("Expected ')' after column list");
+            }
+        }
+
+        // Parse VALUES keyword
+        if (offset < tokens.size() && tokens.get(offset).getType().equals("VALUES")) {
+            offset++;
+        } else {
+            throw new IllegalArgumentException("Expected VALUES keyword");
+        }
+
+        // Parse values list: (val1, val2, ...)
         if (offset < tokens.size() && tokens.get(offset).getType().equals("LPAREN")) {
             offset++;
         } else {
@@ -184,35 +218,21 @@ public class ParserImpl implements Parser {
                 offset++;
                 continue;
             }
-            intoClause.add(new ResTarget(new ColumnRef(tokens.get(offset).getValue()), null));
-            offset++;
-        }
-        if (offset >= tokens.size() - 1) throw new IllegalArgumentException("Expected VALUES keyword in INSERT statement");
-        offset++;
-        if (tokens.get(offset).getType().equals("VALUES")) {
-            offset++;
-        } else {
-            throw new IllegalArgumentException("Expected VALUES keyword in INSERT statement");
-        }
 
-        if (offset < tokens.size() && tokens.get(offset).getType().equals("LPAREN")) {
-            offset++;
-        } else {
-            throw new IllegalArgumentException("Expected '(' after VALUES");
-        }
-
-        while (offset < tokens.size() && !tokens.get(offset).getType().equals("RPAREN")) {
-            if (tokens.get(offset).getType().equals("COMMA")) {
+            // Parse value (can be STRING, NUMBER, IDENT, etc.)
+            Token valueToken = tokens.get(offset);
+            if (valueToken.getType().equals("STRING") ||
+                    valueToken.getType().equals("VARCHAR") ||
+                    valueToken.getType().equals("NUMBER") ||
+                    valueToken.getType().equals("IDENT")) {
+                valuesClause.add(new ResTarget(new ColumnRef(valueToken.getValue()), null));
                 offset++;
-                continue;
+            } else {
+                throw new IllegalArgumentException("Expected value in VALUES list, got: " + valueToken.getType());
             }
-            valuesClause.add(new ResTarget(new ColumnRef(tokens.get(offset).getValue()), null));
-            offset++;
         }
 
-        if (valuesClause.isEmpty() || offset == tokens.size()) throw new IllegalArgumentException("Incorrect sql query");
-
-        if (tokens.get(offset).getType().equals("RPAREN")) {
+        if (offset < tokens.size() && tokens.get(offset).getType().equals("RPAREN")) {
             offset++;
         } else {
             throw new IllegalArgumentException("Expected ')' after VALUES list");
@@ -222,6 +242,21 @@ public class ParserImpl implements Parser {
     }
 
     private AstNode parseCreateStmt(List<Token> tokens) {
+        if (offset >= tokens.size()) {
+            throw new IllegalArgumentException("Unexpected end of input after CREATE");
+        }
+        
+        String createType = tokens.get(offset).getType();
+        if ("TABLE".equals(createType)) {
+            return parseCreateTableStmt(tokens);
+        } else if ("INDEX".equals(createType)) {
+            return parseCreateIndexStmt(tokens);
+        } else {
+            throw new IllegalArgumentException("Expected TABLE or INDEX after CREATE, got: " + createType);
+        }
+    }
+
+    private AstNode parseCreateTableStmt(List<Token> tokens) {
         RangeVar tableName = null;
         List<ColumnDef> columns = new ArrayList<>();
         if (offset < tokens.size() && tokens.get(offset).getType().equals("TABLE")) {
@@ -264,5 +299,67 @@ public class ParserImpl implements Parser {
         }
 
         return new CreateStmt(tableName, columns);
+    }
+
+    private AstNode parseCreateIndexStmt(List<Token> tokens) {
+        // CREATE INDEX index_name ON table_name(column_name) [USING HASH|BTREE]
+        
+        if (offset >= tokens.size() || !tokens.get(offset).getType().equals("INDEX")) {
+            throw new IllegalArgumentException("Expected INDEX keyword after CREATE");
+        }
+        offset++; // пропускаем INDEX
+        
+        if (offset >= tokens.size() || !tokens.get(offset).getType().equals("IDENT")) {
+            throw new IllegalArgumentException("Expected index name after INDEX");
+        }
+        String indexName = tokens.get(offset).getValue();
+        offset++;
+        
+        if (offset >= tokens.size() || !tokens.get(offset).getType().equals("ON")) {
+            throw new IllegalArgumentException("Expected ON keyword after index name");
+        }
+        offset++; // пропускаем ON
+        
+        if (offset >= tokens.size() || !tokens.get(offset).getType().equals("IDENT")) {
+            throw new IllegalArgumentException("Expected table name after ON");
+        }
+        String tableName = tokens.get(offset).getValue();
+        offset++;
+        
+        if (offset >= tokens.size() || !tokens.get(offset).getType().equals("LPAREN")) {
+            throw new IllegalArgumentException("Expected '(' after table name");
+        }
+        offset++; // пропускаем (
+        
+        if (offset >= tokens.size() || !tokens.get(offset).getType().equals("IDENT")) {
+            throw new IllegalArgumentException("Expected column name after '('");
+        }
+        String columnName = tokens.get(offset).getValue();
+        offset++;
+        
+        if (offset >= tokens.size() || !tokens.get(offset).getType().equals("RPAREN")) {
+            throw new IllegalArgumentException("Expected ')' after column name");
+        }
+        offset++; // пропускаем )
+        
+        // Опциональный USING HASH или USING BTREE
+        String indexType = "BTREE"; // по умолчанию
+        if (offset < tokens.size() && tokens.get(offset).getType().equals("USING")) {
+            offset++; // пропускаем USING
+            if (offset >= tokens.size()) {
+                throw new IllegalArgumentException("Expected index type (HASH or BTREE) after USING");
+            }
+            String type = tokens.get(offset).getType();
+            if ("HASH".equals(type)) {
+                indexType = "HASH";
+            } else if ("BTREE".equals(type)) {
+                indexType = "BTREE";
+            } else {
+                throw new IllegalArgumentException("Expected HASH or BTREE after USING, got: " + type);
+            }
+            offset++;
+        }
+        
+        return new CreateIndexStmt(indexName, tableName, columnName, indexType);
     }
 }

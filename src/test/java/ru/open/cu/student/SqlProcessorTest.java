@@ -63,7 +63,7 @@ public class SqlProcessorTest {
         operationManager = new OperationManagerImpl((CatalogManagerImpl) catalogManager, pageFileManager);
         sqlProcessor = new SqlProcessor(lexer, parser, semanticAnalyzer, catalogManager);
         planner = new PlannerImpl(catalogManager);
-        optimizer = new OptimizerImpl();
+        optimizer = new OptimizerImpl(catalogManager);
         executorFactory = new ExecutorFactoryImpl(catalogManager, operationManager);
         queryExecutionEngine = new QueryExecutionEngineImpl();
     }
@@ -77,13 +77,29 @@ public class SqlProcessorTest {
         Executor executor = executorFactory.createExecutor(physicalPlan);
         List<Object> objects = queryExecutionEngine.execute(executor);
         objects.forEach(System.out::println);
-        assertNotNull(catalogManager.getTable("users"));
-        assertEquals("users", catalogManager.getTable("users").getName());
+        assertNotNull(catalogManager.getTable("users2"));
+        assertEquals("users2", catalogManager.getTable("users2").getName());
+    }
+
+    @Test
+    void insertIntegrationTest() {
+        String sql = "INSERT INTO users2 (id, name, age) VALUES (10, bro, 57)";
+        QueryTree queryTree = sqlProcessor.process(sql);
+        LogicalPlanNode logicalPlan = planner.plan(queryTree);
+        PhysicalPlanNode physicalPlan = optimizer.optimize(logicalPlan);
+        Executor executor = executorFactory.createExecutor(physicalPlan);
+        List<Object> objects = queryExecutionEngine.execute(executor);
+        objects.forEach(System.out::println);
     }
 
     @Test
     void selectIntegrationTest() {
-        String sql = "SELECT name FROM users WHERE id > 10;";
-
+        String sql = "SELECT * FROM users2";
+        QueryTree queryTree = sqlProcessor.process(sql);
+        LogicalPlanNode logicalPlan = planner.plan(queryTree);
+        PhysicalPlanNode physicalPlan = optimizer.optimize(logicalPlan);
+        Executor executor = executorFactory.createExecutor(physicalPlan);
+        List<Object> objects = queryExecutionEngine.execute(executor);
+        objects.forEach(System.out::println);
     }
 }

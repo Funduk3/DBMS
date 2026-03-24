@@ -38,8 +38,8 @@ public class Server {
         CatalogManagerImpl catalogManager = new CatalogManagerImpl(defaultBufferPoolManager, pageFileManager);
         OperationManager operationManager = new OperationManagerImpl(catalogManager, pageFileManager);
         Planner planner = new PlannerImpl(catalogManager);
-        Optimizer optimizer = new OptimizerImpl();
-        ExecutorFactory executorFactory = new ExecutorFactoryImpl(catalogManager, operationManager);
+        Optimizer optimizer = new OptimizerImpl(catalogManager);
+        ExecutorFactory executorFactory = new ExecutorFactoryImpl(catalogManager, operationManager, pageFileManager);
         QueryExecutionEngine executionEngine = new QueryExecutionEngineImpl();
 
         while (true) {
@@ -62,15 +62,32 @@ public class Server {
                         }
                         try {
                             var queryTree = sqlProcessor.process(sql);
+                            
                             var logicalPlan = planner.plan(queryTree);
+                            System.out.println("LogicalPlan:\n" + logicalPlan.prettyPrint("  "));
+                            
                             var physicalPlan = optimizer.optimize(logicalPlan);
+                            System.out.println("PhysicalPlan:\n" + physicalPlan.prettyPrint("  "));
+                            
                             var executor = executorFactory.createExecutor(physicalPlan);
                             List<Object> results = executionEngine.execute(executor);
-
-                            if (results != null) {
-                                for (Object row : results) {
-                                    if (row != null) {
-                                        out.println(row.toString());
+                            switch (queryTree.getQueryType()) {
+                                case CREATE -> {
+                                    out.println("CREATED");
+                                }
+                                case CREATE_INDEX -> {
+                                    out.println("INDEX CREATED");
+                                }
+                                case INSERT -> {
+                                    out.println("INSERTED");
+                                }
+                                case SELECT -> {
+                                    if (results != null) {
+                                        for (Object row : results) {
+                                            if (row != null) {
+                                                out.println(row);
+                                            }
+                                        }
                                     }
                                 }
                             }

@@ -1,5 +1,6 @@
 package ru.open.cu.student.execution.executors;
 
+
 import ru.open.cu.student.catalog.model.TableDefinition;
 import ru.open.cu.student.catalog.operation.OperationManager;
 
@@ -10,28 +11,32 @@ public class SeqScanExecutor implements Executor {
 
     private final OperationManager operationManager;
     private final TableDefinition tableDefinition;
-    private Iterator<List<Object>> rowIterator;
 
-    public SeqScanExecutor(OperationManager operationManager, TableDefinition tableDefinition) {
+    private Iterator<List<Object>> iterator;
+
+    public SeqScanExecutor(OperationManager operationManager,
+                           TableDefinition tableDefinition) {
         this.operationManager = operationManager;
         this.tableDefinition = tableDefinition;
     }
 
     @Override
     public void open() {
+        List<List<Object>> rows =
+                operationManager.selectAll(tableDefinition.getName());
+        iterator = rows.iterator();
     }
 
     @Override
     public Object next() {
-        List<List<Object>> allRows = operationManager.selectAll(tableDefinition.getName());
-        this.rowIterator = allRows.iterator();
-        if (rowIterator.hasNext()) {
-            return rowIterator.next();
+        if (iterator != null && iterator.hasNext()) {
+            return iterator.next();
         }
         return null;
     }
 
     @Override
     public void close() {
+        iterator = null;
     }
 }
